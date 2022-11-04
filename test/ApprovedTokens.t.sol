@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
 import "../src/ApprovedTokens.sol";
+import "../src/interfaces/IApprovedTokens.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract ApprovedTokensTest is Test {
@@ -30,13 +31,13 @@ contract ApprovedTokensTest is Test {
 
     function testApproveTokenRejectedOnNullAddress() public {
         vm.startPrank(owner);
-        vm.expectRevert(ApprovedTokens.InvalidTokenAddress.selector);
+        vm.expectRevert(IApprovedTokens.InvalidTokenAddress.selector);
         approvedTokens.approveToken(address(0));
     }
 
     function testApproveTokenRejectedOnNonContractAddress() public {
         vm.startPrank(owner);
-        vm.expectRevert(ApprovedTokens.InvalidTokenAddress.selector);
+        vm.expectRevert(IApprovedTokens.InvalidTokenAddress.selector);
         approvedTokens.approveToken(address(5));
     }
 
@@ -46,10 +47,10 @@ contract ApprovedTokensTest is Test {
         vm.expectEmit(true, false, false, false);
         emit TokenApproved(address(artemisToken));
         approvedTokens.approveToken(address(artemisToken));
-        assertEq(approvedTokens.approvedTokenAddresses(0), address(artemisToken));
+        assertEq(approvedTokens.getApprovedTokenAddress(0), address(artemisToken));
         assertEq(approvedTokens.isTokenApproved(address(artemisToken)), true);
 
-        vm.expectRevert(ApprovedTokens.TokenAlreadyApproved.selector);
+        vm.expectRevert(IApprovedTokens.TokenAlreadyApproved.selector);
         approvedTokens.approveToken(address(artemisToken));
     }
 
@@ -61,11 +62,11 @@ contract ApprovedTokensTest is Test {
 
     function testRevokeTokenIndexOutOfBounds() public {
         vm.startPrank(owner);
-        vm.expectRevert(ApprovedTokens.IndexDoesNotExist.selector);
+        vm.expectRevert(IApprovedTokens.IndexDoesNotExist.selector);
         approvedTokens.revokeToken(0);
 
         approvedTokens.approveToken(address(artemisToken));
-        vm.expectRevert(ApprovedTokens.IndexDoesNotExist.selector);
+        vm.expectRevert(IApprovedTokens.IndexDoesNotExist.selector);
         approvedTokens.revokeToken(1);
     }
 
@@ -78,7 +79,7 @@ contract ApprovedTokensTest is Test {
         approvedTokens.revokeToken(0);
         assertEq(approvedTokens.isTokenApproved(address(artemisToken)), false);
         vm.expectRevert();
-        approvedTokens.approvedTokenAddresses(0);
+        approvedTokens.getApprovedTokenAddress(0);
     }
 
     function testRevokeTokenPassingWithMoreAlreadyApprovedTokens() public {
@@ -90,7 +91,7 @@ contract ApprovedTokensTest is Test {
         emit TokenRevoked(address(artemisToken));
         approvedTokens.revokeToken(0);
         assertEq(approvedTokens.isTokenApproved(address(artemisToken)), false);
-        assertEq(approvedTokens.approvedTokenAddresses(0), address(incrypstorToken));
+        assertEq(approvedTokens.getApprovedTokenAddress(0), address(incrypstorToken));
     }
 
     function testGetApprovedTokenAddressesEmptySet() public {
@@ -127,7 +128,7 @@ contract ApprovedTokensTest is Test {
             keccak256(abi.encode(tokens[0])),
             keccak256(
                 abi.encode(
-                    ApprovedTokens.Token({
+                    IApprovedTokens.Token({
                         name: artemisToken.name(),
                         symbol: artemisToken.symbol(),
                         addr: address(artemisToken)
@@ -139,10 +140,30 @@ contract ApprovedTokensTest is Test {
             keccak256(abi.encode(tokens[1])),
             keccak256(
                 abi.encode(
-                    ApprovedTokens.Token({
+                    IApprovedTokens.Token({
                         name: incrypstorToken.name(),
                         symbol: incrypstorToken.symbol(),
                         addr: address(incrypstorToken)
+                    })
+                )
+            )
+        );
+    }
+
+    function testGetApprovedToken() public {
+        vm.startPrank(owner);
+        approvedTokens.approveToken(address(artemisToken));
+        vm.stopPrank();
+
+        IApprovedTokens.Token memory token = approvedTokens.getApprovedToken(0);
+        assertEq(
+            keccak256(abi.encode(token)),
+            keccak256(
+                abi.encode(
+                    IApprovedTokens.Token({
+                        name: artemisToken.name(),
+                        symbol: artemisToken.symbol(),
+                        addr: address(artemisToken)
                     })
                 )
             )

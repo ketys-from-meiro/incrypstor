@@ -1,25 +1,13 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/IApprovedTokens.sol";
 
-contract ApprovedTokens is Ownable {
-    event TokenApproved(address indexed tokenAddress);
-    event TokenRevoked(address indexed tokenAddress);
-
-    error InvalidTokenAddress();
-    error TokenAlreadyApproved();
-    error IndexDoesNotExist();
-
-    struct Token {
-        string name;
-        string symbol;
-        address addr;
-    }
-
-    address[] public approvedTokenAddresses;
-    mapping(address => bool) public isTokenApproved;
+contract ApprovedTokens is IApprovedTokens, Ownable {
+    address[] private _approvedTokenAddresses;
+    mapping(address => bool) private _isTokenApproved;
 
     function approveToken(address tokenAddress_) external onlyOwner {
         if (_isNullAddress(tokenAddress_) || tokenAddress_.code.length == 0) {
@@ -27,28 +15,45 @@ contract ApprovedTokens is Ownable {
             // the given address actually imlements ERC20
             revert InvalidTokenAddress();
         }
-        if (isTokenApproved[tokenAddress_]) {
+        if (_isTokenApproved[tokenAddress_]) {
             revert TokenAlreadyApproved();
         }
-        isTokenApproved[tokenAddress_] = true;
-        approvedTokenAddresses.push(tokenAddress_);
+        _isTokenApproved[tokenAddress_] = true;
+        _approvedTokenAddresses.push(tokenAddress_);
         emit TokenApproved(tokenAddress_);
     }
 
     function revokeToken(uint256 index_) external onlyOwner {
-        if (index_ >= approvedTokenAddresses.length) {
+        if (index_ >= _approvedTokenAddresses.length) {
             revert IndexDoesNotExist();
         }
-        address tokenAddress = approvedTokenAddresses[index_];
-        isTokenApproved[tokenAddress] = false;
+        address tokenAddress = _approvedTokenAddresses[index_];
+        _isTokenApproved[tokenAddress] = false;
         _removeFromApprovedTokenAddressesArray(index_);
         emit TokenRevoked(tokenAddress);
     }
 
-    function getApprovedTokenAddresses() public view returns (address[] memory) {
-        address[] memory tokenAddresses = new address[](approvedTokenAddresses.length);
-        for (uint256 i = 0; i < approvedTokenAddresses.length; i++) {
-            tokenAddresses[i] = approvedTokenAddresses[i];
+    function isTokenApproved(address addr_) external view returns (bool) {
+        return _isTokenApproved[addr_];
+    }
+
+    function getApprovedTokenAddress(uint256 index_) external view returns (address) {
+        return _approvedTokenAddresses[index_];
+    }
+
+    function getApprovedToken(uint256 index_) external view returns (Token memory) {
+        IERC20Metadata tokenMetadata = IERC20Metadata(_approvedTokenAddresses[index_]);
+        Token memory token;
+        token.addr = _approvedTokenAddresses[index_];
+        token.name = tokenMetadata.name();
+        token.symbol = tokenMetadata.symbol();
+        return token;
+    }
+
+    function getApprovedTokenAddresses() external view returns (address[] memory) {
+        address[] memory tokenAddresses = new address[](_approvedTokenAddresses.length);
+        for (uint256 i = 0; i < _approvedTokenAddresses.length; i++) {
+            tokenAddresses[i] = _approvedTokenAddresses[i];
         }
         return tokenAddresses;
     }
@@ -56,12 +61,12 @@ contract ApprovedTokens is Ownable {
     /**
      * May not be used, we can fetch tokens metadata off-chain by using contract addresses only
      */
-    function getApprovedTokens() public view returns (Token[] memory) {
-        Token[] memory tokens = new Token[](approvedTokenAddresses.length);
-        for (uint256 i = 0; i < approvedTokenAddresses.length; i++) {
-            IERC20Metadata tokenMetadata = IERC20Metadata(approvedTokenAddresses[i]);
+    function getApprovedTokens() external view returns (Token[] memory) {
+        Token[] memory tokens = new Token[](_approvedTokenAddresses.length);
+        for (uint256 i = 0; i < _approvedTokenAddresses.length; i++) {
+            IERC20Metadata tokenMetadata = IERC20Metadata(_approvedTokenAddresses[i]);
             Token memory token;
-            token.addr = approvedTokenAddresses[i];
+            token.addr = _approvedTokenAddresses[i];
             token.name = tokenMetadata.name();
             token.symbol = tokenMetadata.symbol();
             tokens[i] = token;
@@ -70,8 +75,8 @@ contract ApprovedTokens is Ownable {
     }
 
     function _removeFromApprovedTokenAddressesArray(uint256 index_) private {
-        approvedTokenAddresses[index_] = approvedTokenAddresses[approvedTokenAddresses.length - 1];
-        approvedTokenAddresses.pop();
+        _approvedTokenAddresses[index_] = _approvedTokenAddresses[_approvedTokenAddresses.length - 1];
+        _approvedTokenAddresses.pop();
     }
 
     function _isNullAddress(address addr) private pure returns (bool) {
