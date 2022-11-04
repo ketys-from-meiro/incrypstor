@@ -17,9 +17,11 @@ contract ApprovedTokensTest is Test {
 
     function setUp() public {
         vm.startPrank(owner);
+
         approvedTokens = new ApprovedTokens();
         artemisToken = new ERC20("Artemis", "ATM");
         incrypstorToken = new ERC20("InCrypstor", "ICR");
+
         vm.stopPrank();
     }
 
@@ -54,7 +56,7 @@ contract ApprovedTokensTest is Test {
         approvedTokens.approveToken(address(artemisToken));
     }
 
-    function testRevokeTokenREjectedByNonOwner() public {
+    function testRevokeTokenRejectedByNonOwner() public {
         vm.startPrank(address(2));
         vm.expectRevert("Ownable: caller is not the owner");
         approvedTokens.approveToken(address(5));
