@@ -10,7 +10,7 @@ contract ApprovedTokens is Ownable {
 
     error InvalidTokenAddress();
     error TokenAlreadyApproved();
-    error TokenNotApproved();
+    error IndexDoesNotExist();
 
     struct Token {
         string name;
@@ -19,7 +19,7 @@ contract ApprovedTokens is Ownable {
     }
 
     address[] public approvedTokenAddresses;
-    mapping(address => bool) private _isTokenAddressApproved;
+    mapping(address => bool) public isTokenApproved;
 
     function approveToken(address tokenAddress_) external onlyOwner {
         if (_isNullAddress(tokenAddress_) || tokenAddress_.code.length == 0) {
@@ -27,26 +27,26 @@ contract ApprovedTokens is Ownable {
             // the given address actually imlements ERC20
             revert InvalidTokenAddress();
         }
-        if (_isTokenAddressApproved[tokenAddress_]) {
+        if (isTokenApproved[tokenAddress_]) {
             revert TokenAlreadyApproved();
         }
-        _isTokenAddressApproved[tokenAddress_] = true;
+        isTokenApproved[tokenAddress_] = true;
         approvedTokenAddresses.push(tokenAddress_);
         emit TokenApproved(tokenAddress_);
     }
 
     function revokeToken(uint256 index_) external onlyOwner {
         if (index_ >= approvedTokenAddresses.length) {
-            revert TokenNotApproved();
+            revert IndexDoesNotExist();
         }
         address tokenAddress = approvedTokenAddresses[index_];
-        _isTokenAddressApproved[tokenAddress] = false;
+        isTokenApproved[tokenAddress] = false;
         _removeFromApprovedTokenAddressesArray(index_);
         emit TokenRevoked(tokenAddress);
     }
 
     function getApprovedTokenAddresses() public view returns (address[] memory) {
-        address[] memory tokenAddresses;
+        address[] memory tokenAddresses = new address[](approvedTokenAddresses.length);
         for (uint256 i = 0; i < approvedTokenAddresses.length; i++) {
             tokenAddresses[i] = approvedTokenAddresses[i];
         }
@@ -57,7 +57,7 @@ contract ApprovedTokens is Ownable {
      * May not be used, we can fetch tokens metadata off-chain by using contract addresses only
      */
     function getApprovedTokens() public view returns (Token[] memory) {
-        Token[] memory tokens;
+        Token[] memory tokens = new Token[](approvedTokenAddresses.length);
         for (uint256 i = 0; i < approvedTokenAddresses.length; i++) {
             IERC20Metadata tokenMetadata = IERC20Metadata(approvedTokenAddresses[i]);
             Token memory token;
