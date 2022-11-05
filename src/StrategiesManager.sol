@@ -10,7 +10,6 @@ contract StrategiesManager is IStrategiesManager, Ownable {
         string name;
         mapping(address => uint8) tokenPercentage;
         address[] tokens;
-        uint256 valueToSpend;
     }
 
     uint8 public constant MAX_TOKENS_PER_STRATEGY_MIN_COUNT = 10;
@@ -64,6 +63,26 @@ contract StrategiesManager is IStrategiesManager, Ownable {
         return newStrategyId;
     }
 
+    function getYourStrategy(uint256 strategyId_) external view returns (IStrategiesManager.StrategyView memory) {
+        Strategy storage strategy = _userStrategies[msg.sender][strategyId_];
+        if (strategy.tokens.length == 0) {
+            revert StrategyDoesNotExist();
+        }
+        return _transformStrategyToViewType(strategy);
+    }
+
+    function getYourStrategies() external view returns (IStrategiesManager.StrategyView[] memory) {
+        uint256[] memory userStrategyIds = _userStrategyIds[msg.sender];
+        IStrategiesManager.StrategyView[] memory strategyViews = new IStrategiesManager.StrategyView[](
+            userStrategyIds.length
+        );
+        for (uint256 i = 0; i < userStrategyIds.length; i++) {
+            Strategy storage strategy = _userStrategies[msg.sender][userStrategyIds[i]];
+            strategyViews[i] = _transformStrategyToViewType(strategy);
+        }
+        return strategyViews;
+    }
+
     function setMaxTokensPerStrategy(uint8 maxTokensPerStrategy_) external onlyOwner {
         if (maxTokensPerStrategy_ < MAX_TOKENS_PER_STRATEGY_MIN_COUNT) {
             revert InvalidMaxTokensPerStrategy({validMin: MAX_TOKENS_PER_STRATEGY_MIN_COUNT});
@@ -80,6 +99,24 @@ contract StrategiesManager is IStrategiesManager, Ownable {
         uint8 prevValue = maxStrategiesPerUser;
         maxStrategiesPerUser = maxStrategiesPerUser_;
         emit MaxStrategiesPerUserChanged(msg.sender, prevValue, maxStrategiesPerUser_);
+    }
+
+    function _transformStrategyToViewType(Strategy storage strategy)
+        private
+        view
+        returns (IStrategiesManager.StrategyView memory)
+    {
+        IStrategiesManager.StrategyView memory strategyView;
+        strategyView.name = strategy.name;
+        strategyView.tokensParams = new IStrategiesManager.TokenParams[](strategy.tokens.length);
+        for (uint256 i = 0; i < strategy.tokens.length; i++) {
+            address tokenAddr = strategy.tokens[i];
+            strategyView.tokensParams[i] = IStrategiesManager.TokenParams({
+                addr: tokenAddr,
+                percentage: strategy.tokenPercentage[tokenAddr]
+            });
+        }
+        return strategyView;
     }
 
     // TODO:

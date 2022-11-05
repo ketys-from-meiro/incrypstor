@@ -35,7 +35,7 @@ contract StrategiesManagerTest is Test {
         vm.stopPrank();
     }
 
-    function testCanCreateStrategies() public {
+    function testCreateStrategyPassing() public {
         vm.startPrank(address(2));
         uint256 strategyId = 1;
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
@@ -59,7 +59,7 @@ contract StrategiesManagerTest is Test {
         assertEq(strategyId, createdStrategyId);
     }
 
-    function testCannotCreateMoreStrategiesThanMaxStrategiesPerUser() public {
+    function testCreateStrategyRejectedAboveMaxUserCount() public {
         vm.startPrank(address(2));
         uint8 maxStrategiesPerUser = strategiesManager.maxStrategiesPerUser();
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
@@ -72,7 +72,7 @@ contract StrategiesManagerTest is Test {
         strategiesManager.createStrategy("Strategy above limit", tokensParams);
     }
 
-    function testCannotCreateStrategyWithMoreTokensThanMaxTokensPerStrategy() public {
+    function testCreateStrategyRejectedAboveMaxTokensCount() public {
         vm.startPrank(address(2));
         uint8 maxTokensPerStrategy = strategiesManager.maxTokensPerStrategy();
         IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](
@@ -87,7 +87,7 @@ contract StrategiesManagerTest is Test {
         strategiesManager.createStrategy("Strategy with more tokens than allowed", tokensParams);
     }
 
-    function testCannotCreateStrategyWithNotApprovedToken() public {
+    function testCreateStrategyRejectedNotApprovedToken() public {
         vm.startPrank(address(2));
         IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](1);
         tokensParams[0] = IStrategiesManager.TokenParams({addr: address(25), percentage: 100});
@@ -95,7 +95,7 @@ contract StrategiesManagerTest is Test {
         strategiesManager.createStrategy("Strategy with not allowed token", tokensParams);
     }
 
-    function testCannotCreateStrategyWithDuplicateTokens() public {
+    function testCreateStrategyRejectedDuplicateToken() public {
         vm.startPrank(address(2));
         IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](3);
         tokensParams[0] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 50});
@@ -105,7 +105,7 @@ contract StrategiesManagerTest is Test {
         strategiesManager.createStrategy("Duplicate token in strategy", tokensParams);
     }
 
-    function testCannotCreateStrategyWithTotalPercentageDifferentThan100() public {
+    function testCreateStrategyRejectedPercentageSumNot100() public {
         vm.startPrank(address(2));
         IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](2);
         tokensParams[0] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 50});
@@ -115,6 +115,45 @@ contract StrategiesManagerTest is Test {
         tokensParams[1].percentage = 51;
         vm.expectRevert(IStrategiesManager.StrategyTotalPercentageNotEq100.selector);
         strategiesManager.createStrategy("Strategy with 101%", tokensParams);
+    }
+
+    function testGetYourStrategy() public {
+        vm.startPrank(address(2));
+        IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
+        uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
+        IStrategiesManager.StrategyView memory strategyView = strategiesManager.getYourStrategy(createdStrategyId);
+        assertEq(strategyView.name, "AllIn Shitcoins");
+        assertEq(keccak256(abi.encode(strategyView.tokensParams)), keccak256(abi.encode(tokensParams)));
+    }
+
+    function testGetYourStrategyRejectedNotExistingId() public {
+        vm.startPrank(address(2));
+        vm.expectRevert(IStrategiesManager.StrategyDoesNotExist.selector);
+        strategiesManager.getYourStrategy(0);
+
+        IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
+        uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
+        strategiesManager.getYourStrategy(createdStrategyId);
+
+        vm.expectRevert(IStrategiesManager.StrategyDoesNotExist.selector);
+        strategiesManager.getYourStrategy(createdStrategyId + 1);
+    }
+
+    function getYourStrategies() public {
+        vm.startPrank(address(2));
+        IStrategiesManager.StrategyView[] memory strategyViews;
+        strategyViews = strategiesManager.getYourStrategies();
+        assertEq(strategyViews.length, 0);
+
+        IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
+        strategiesManager.createStrategy("First", tokensParams);
+        strategiesManager.createStrategy("Second", tokensParams);
+        strategyViews = strategiesManager.getYourStrategies();
+        assertEq(strategyViews.length, 2);
+        assertEq(strategyViews[0].name, "First");
+        assertEq(keccak256(abi.encode(strategyViews[0].tokensParams)), keccak256(abi.encode(tokensParams)));
+        assertEq(strategyViews[1].name, "Second");
+        assertEq(keccak256(abi.encode(strategyViews[1].tokensParams)), keccak256(abi.encode(tokensParams)));
     }
 
     function testSetMaxTokensPerStrategyRejectedByNonOwner() public {
