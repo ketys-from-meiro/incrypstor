@@ -35,7 +35,87 @@ contract StrategiesManagerTest is Test {
         vm.stopPrank();
     }
 
-    // TODO: test create strategy function!
+    function testCanCreateStrategies() public {
+        vm.startPrank(address(2));
+        uint256 strategyId = 1;
+        IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
+        vm.expectEmit(true, false, false, true);
+        emit StrategyCreated(address(2), strategyId);
+        uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
+        assertEq(strategyId, createdStrategyId);
+
+        strategyId = 2;
+        vm.expectEmit(true, false, false, true);
+        emit StrategyCreated(address(2), strategyId);
+        createdStrategyId = strategiesManager.createStrategy("Max yield", tokensParams);
+        assertEq(strategyId, createdStrategyId);
+        vm.stopPrank();
+
+        vm.startPrank(address(3));
+        strategyId = 1;
+        vm.expectEmit(true, false, false, true);
+        emit StrategyCreated(address(3), strategyId);
+        createdStrategyId = strategiesManager.createStrategy("Ape", tokensParams);
+        assertEq(strategyId, createdStrategyId);
+    }
+
+    function testCannotCreateMoreStrategiesThanMaxStrategiesPerUser() public {
+        vm.startPrank(address(2));
+        uint8 maxStrategiesPerUser = strategiesManager.maxStrategiesPerUser();
+        IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
+        for (uint8 i = 0; i < maxStrategiesPerUser; i++) {
+            strategiesManager.createStrategy("", tokensParams);
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(IStrategiesManager.StrategiesLimitReached.selector, maxStrategiesPerUser)
+        );
+        strategiesManager.createStrategy("Strategy above limit", tokensParams);
+    }
+
+    function testCannotCreateStrategyWithMoreTokensThanMaxTokensPerStrategy() public {
+        vm.startPrank(address(2));
+        uint8 maxTokensPerStrategy = strategiesManager.maxTokensPerStrategy();
+        IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](
+            maxTokensPerStrategy + 1
+        );
+        for (uint8 i = 0; i <= maxTokensPerStrategy; i++) {
+            tokensParams[i] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 5});
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(IStrategiesManager.StrategyTokensLimitReached.selector, maxTokensPerStrategy)
+        );
+        strategiesManager.createStrategy("Strategy with more tokens than allowed", tokensParams);
+    }
+
+    function testCannotCreateStrategyWithNotApprovedToken() public {
+        vm.startPrank(address(2));
+        IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](1);
+        tokensParams[0] = IStrategiesManager.TokenParams({addr: address(25), percentage: 100});
+        vm.expectRevert(IStrategiesManager.TokenNotApproved.selector);
+        strategiesManager.createStrategy("Strategy with not allowed token", tokensParams);
+    }
+
+    function testCannotCreateStrategyWithDuplicateTokens() public {
+        vm.startPrank(address(2));
+        IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](3);
+        tokensParams[0] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 50});
+        tokensParams[1] = IStrategiesManager.TokenParams({addr: address(incrypstorToken), percentage: 25});
+        tokensParams[2] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 25});
+        vm.expectRevert(IStrategiesManager.DuplicateToken.selector);
+        strategiesManager.createStrategy("Duplicate token in strategy", tokensParams);
+    }
+
+    function testCannotCreateStrategyWithTotalPercentageDifferentThan100() public {
+        vm.startPrank(address(2));
+        IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](2);
+        tokensParams[0] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 50});
+        tokensParams[1] = IStrategiesManager.TokenParams({addr: address(incrypstorToken), percentage: 49});
+        vm.expectRevert(IStrategiesManager.StrategyTotalPercentageNotEq100.selector);
+        strategiesManager.createStrategy("Strategy with 99%", tokensParams);
+        tokensParams[1].percentage = 51;
+        vm.expectRevert(IStrategiesManager.StrategyTotalPercentageNotEq100.selector);
+        strategiesManager.createStrategy("Strategy with 101%", tokensParams);
+    }
 
     function testSetMaxTokensPerStrategyRejectedByNonOwner() public {
         vm.startPrank(address(2));
@@ -79,5 +159,14 @@ contract StrategiesManagerTest is Test {
         emit MaxStrategiesPerUserChanged(owner, defaultValue, 10);
         strategiesManager.setMaxStrategiesPerUser(10);
         assertEq(strategiesManager.maxStrategiesPerUser(), 10);
+    }
+
+    // --- PRIVATE REUSABLE FUNCTIONS ---
+
+    function _createTokensParamsForSuccessCall() private view returns (IStrategiesManager.TokenParams[] memory) {
+        IStrategiesManager.TokenParams[] memory tokensParams = new IStrategiesManager.TokenParams[](2);
+        tokensParams[0] = IStrategiesManager.TokenParams({addr: address(artemisToken), percentage: 25});
+        tokensParams[1] = IStrategiesManager.TokenParams({addr: address(incrypstorToken), percentage: 75});
+        return tokensParams;
     }
 }

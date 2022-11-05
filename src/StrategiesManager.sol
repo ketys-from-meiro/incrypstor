@@ -13,13 +13,11 @@ contract StrategiesManager is IStrategiesManager, Ownable {
         uint256 valueToSpend;
     }
 
-    IApprovedTokens public approvedTokens;
-
     uint8 public constant MAX_TOKENS_PER_STRATEGY_MIN_COUNT = 10;
     uint8 public constant MAX_STRATEGIES_PER_USER_MIN_COUNT = 5;
-
     uint8 public maxTokensPerStrategy = MAX_TOKENS_PER_STRATEGY_MIN_COUNT;
     uint8 public maxStrategiesPerUser = MAX_STRATEGIES_PER_USER_MIN_COUNT;
+    IApprovedTokens public approvedTokens;
     mapping(address => mapping(uint256 => Strategy)) private _userStrategies;
     mapping(address => uint256[]) private _userStrategyIds;
 
@@ -33,10 +31,10 @@ contract StrategiesManager is IStrategiesManager, Ownable {
     {
         uint256 userStrategiesCount = _userStrategyIds[msg.sender].length;
         if (userStrategiesCount >= maxStrategiesPerUser) {
-            revert StrategiesLimitReached({yourCount: uint8(userStrategiesCount), maxCount: maxStrategiesPerUser});
+            revert StrategiesLimitReached({maxCount: maxStrategiesPerUser});
         }
         if (tokensParams_.length >= maxTokensPerStrategy) {
-            revert StrategyTokensLimitReached({yourCount: uint8(tokensParams_.length), maxCount: maxTokensPerStrategy});
+            revert StrategyTokensLimitReached({maxCount: maxTokensPerStrategy});
         }
 
         uint256 newStrategyId = userStrategiesCount == 0
@@ -84,7 +82,7 @@ contract StrategiesManager is IStrategiesManager, Ownable {
         emit MaxStrategiesPerUserChanged(msg.sender, prevValue, maxStrategiesPerUser_);
     }
 
-    // TODO: not forget -> create: respektuje count parametry
-    // modify: respektuje count parametry a v pripade, ze user ma jiz vice strategii
+    // TODO:
+    // modifyStrategy: respektuje count parametry a v pripade, ze user ma jiz vice strategii
     // nebo strategii s vice tokeny, tak nedovoli navysit pocet pokud jiz je pres limit
 }

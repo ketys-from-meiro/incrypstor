@@ -9,8 +9,8 @@ interface IStrategiesManager {
     }
 
     // --- ERRORS ---
-    error StrategiesLimitReached(uint8 yourCount, uint8 maxCount);
-    error StrategyTokensLimitReached(uint8 yourCount, uint8 maxCount);
+    error StrategiesLimitReached(uint8 maxCount);
+    error StrategyTokensLimitReached(uint8 maxCount);
     error InvalidMaxTokensPerStrategy(uint8 validMin);
     error InvalidMaxStrategiesPerUser(uint8 validMin);
     error TokenNotApproved();
