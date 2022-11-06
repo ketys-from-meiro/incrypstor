@@ -3,9 +3,12 @@ pragma solidity ^0.8.17;
 
 import "./interfaces/IStrategiesManager.sol";
 import "./interfaces/IApprovedTokens.sol";
+import "./interfaces/ITokensOperations.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract StrategiesManager is IStrategiesManager, Ownable {
+contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
     struct Strategy {
         string name;
         mapping(address => uint8) tokenPercentage;
@@ -17,11 +20,13 @@ contract StrategiesManager is IStrategiesManager, Ownable {
     uint8 public maxTokensPerStrategy = MAX_TOKENS_PER_STRATEGY_MIN_COUNT;
     uint8 public maxStrategiesPerUser = MAX_STRATEGIES_PER_USER_MIN_COUNT;
     IApprovedTokens public approvedTokens;
-    mapping(address => mapping(uint256 => Strategy)) private _userStrategies;
+    ITokensOperations public tokensOperations;
+    mapping(address => mapping(uint256 => Strategy)) private _userStrategy;
     mapping(address => uint256[]) private _userStrategyIds;
 
-    constructor(address approvedTokens_) {
+    constructor(address approvedTokens_, address tokensOperations_) {
         approvedTokens = IApprovedTokens(approvedTokens_);
+        tokensOperations = ITokensOperations(tokensOperations_);
     }
 
     function createStrategy(string calldata name_, IStrategiesManager.TokenParams[] memory tokensParams_)
@@ -40,7 +45,7 @@ contract StrategiesManager is IStrategiesManager, Ownable {
             ? 1
             : _userStrategyIds[msg.sender][userStrategiesCount - 1] + 1;
         _userStrategyIds[msg.sender].push(newStrategyId);
-        Strategy storage newStrategy = _userStrategies[msg.sender][newStrategyId];
+        Strategy storage newStrategy = _userStrategy[msg.sender][newStrategyId];
         newStrategy.name = name_;
         uint8 percentageSum;
         for (uint256 i = 0; i < tokensParams_.length; i++) {
@@ -64,10 +69,7 @@ contract StrategiesManager is IStrategiesManager, Ownable {
     }
 
     function getYourStrategy(uint256 strategyId_) external view returns (IStrategiesManager.StrategyView memory) {
-        Strategy storage strategy = _userStrategies[msg.sender][strategyId_];
-        if (strategy.tokens.length == 0) {
-            revert StrategyDoesNotExist();
-        }
+        Strategy storage strategy = _getUserStrategy(msg.sender, strategyId_);
         return _transformStrategyToViewType(strategy);
     }
 
@@ -77,11 +79,46 @@ contract StrategiesManager is IStrategiesManager, Ownable {
             userStrategyIds.length
         );
         for (uint256 i = 0; i < userStrategyIds.length; i++) {
-            Strategy storage strategy = _userStrategies[msg.sender][userStrategyIds[i]];
+            Strategy storage strategy = _userStrategy[msg.sender][userStrategyIds[i]];
             strategyViews[i] = _transformStrategyToViewType(strategy);
         }
         return strategyViews;
     }
+
+    // must send msg.value covering `amount_` deposit plus fees for 0x swaps (swapQuotes[].gasPrice)
+    function investIntoYourStrategy(
+        uint256 strategyId_,
+        uint256 amount_,
+        IStrategiesManager.ZeroXApiQuote[] calldata swapQuotes_
+    ) external payable nonReentrant {
+        Strategy storage strategy = _getUserStrategy(msg.sender, strategyId_);
+        if (swapQuotes_.length != strategy.tokens.length) {
+            revert SwapQuotesArrayLengthDoesntMatch();
+        }
+        tokensOperations.depositETH{value: amount_}(msg.sender, strategyId_);
+        for (uint256 i = 0; i < swapQuotes_.length; i++) {
+            address tokenAddress = swapQuotes_[i].token;
+            if (strategy.tokenPercentage[tokenAddress] == 0) {
+                revert UnknownTokenInSwapQuotes({token: tokenAddress});
+            }
+            uint256 amountToInvest = (amount_ / 100) * strategy.tokenPercentage[tokenAddress];
+            tokensOperations.buyToken{value: swapQuotes_[i].gasPrice}(
+                msg.sender,
+                strategyId_,
+                IERC20(tokenAddress),
+                amountToInvest,
+                swapQuotes_[i].spender,
+                swapQuotes_[i].swapCallData
+            );
+        }
+        emit StrategyInvestmentCompleted(msg.sender, strategyId_, amount_);
+    }
+
+    function investIntoUserStrategy(
+        address user_,
+        uint256 strategyId_,
+        uint256 amount_
+    ) external payable nonReentrant {}
 
     function setMaxTokensPerStrategy(uint8 maxTokensPerStrategy_) external onlyOwner {
         if (maxTokensPerStrategy_ < MAX_TOKENS_PER_STRATEGY_MIN_COUNT) {
@@ -117,6 +154,14 @@ contract StrategiesManager is IStrategiesManager, Ownable {
             });
         }
         return strategyView;
+    }
+
+    function _getUserStrategy(address user_, uint256 strategyId_) private view returns (Strategy storage) {
+        Strategy storage strategy = _userStrategy[user_][strategyId_];
+        if (strategy.tokens.length == 0) {
+            revert StrategyDoesNotExist();
+        }
+        return strategy;
     }
 
     // TODO:

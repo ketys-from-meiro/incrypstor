@@ -59,7 +59,7 @@ contract ApprovedTokens is IApprovedTokens, Ownable {
     }
 
     /**
-     * May not be used, we can fetch tokens metadata off-chain by using contract addresses only
+     * May not be used, we can fetch tokens metadata off-chain using contract addresses only
      */
     function getApprovedTokens() external view returns (Token[] memory) {
         Token[] memory tokens = new Token[](_approvedTokenAddresses.length);
