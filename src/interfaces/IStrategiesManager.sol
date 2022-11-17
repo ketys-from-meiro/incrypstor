@@ -9,6 +9,7 @@ interface IStrategiesManager {
     }
 
     struct StrategyView {
+        uint256 id;
         string name;
         TokenParams[] tokensParams;
     }
@@ -25,6 +26,7 @@ interface IStrategiesManager {
     error StrategyTokensLimitReached(uint8 maxCount);
     error InvalidMaxTokensPerStrategy(uint8 validMin);
     error InvalidMaxStrategiesPerUser(uint8 validMin);
+    error InvalidZeroPercentage(address token);
     error TokenNotApproved();
     error DuplicateToken();
     error StrategyTotalPercentageNotEq100();
@@ -33,17 +35,22 @@ interface IStrategiesManager {
     error UnknownTokenInSwapQuotes(address token);
 
     // --- EVENTS ---
-    event StrategyCreated(address indexed user, uint256 strategyId);
+    event StrategyCreated(address indexed user, uint256 indexed strategyId);
     event MaxTokensPerStrategyChanged(address indexed owner, uint8 prevValue, uint8 newValue);
     event MaxStrategiesPerUserChanged(address indexed owner, uint8 prevValue, uint8 newValue);
-    event StrategyInvestmentCompleted(address indexed user, uint256 strategyId, uint256 amount);
+    event StrategyInvestmentCompleted(
+        address indexed user,
+        uint256 indexed strategyId,
+        uint256 timestamp,
+        uint256 amount
+    );
 
     // --- FUNCTIONS ---
     function createStrategy(string calldata name_, TokenParams[] calldata tokensParams_) external returns (uint256);
 
-    function getYourStrategy(uint256 strategyId_) external view returns (StrategyView memory);
+    function getUserStrategy(address address_, uint256 strategyId_) external view returns (StrategyView memory);
 
-    function getYourStrategies() external view returns (StrategyView[] memory);
+    function getUserStrategies(address address_) external view returns (StrategyView[] memory);
 
     function investIntoYourStrategy(
         uint256 strategyId_,

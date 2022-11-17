@@ -8,7 +8,7 @@ import "../src/interfaces/IStrategiesManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract StrategiesManagerTest is Test {
-    event StrategyCreated(address indexed investor, uint256 strategyId);
+    event StrategyCreated(address indexed investor, uint256 indexed strategyId);
     event MaxTokensPerStrategyChanged(address indexed owner, uint8 prevValue, uint8 newValue);
     event MaxStrategiesPerUserChanged(address indexed owner, uint8 prevValue, uint8 newValue);
 
@@ -30,7 +30,8 @@ contract StrategiesManagerTest is Test {
         approvedTokens.approveToken(address(artemisToken));
         approvedTokens.approveToken(address(incrypstorToken));
 
-        strategiesManager = new StrategiesManager(address(approvedTokens));
+        // TODO: replace second param with TokensOperations contract
+        strategiesManager = new StrategiesManager(address(approvedTokens), address(1));
 
         vm.stopPrank();
     }
@@ -39,13 +40,13 @@ contract StrategiesManagerTest is Test {
         vm.startPrank(address(2));
         uint256 strategyId = 1;
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
-        vm.expectEmit(true, false, false, true);
+        vm.expectEmit(true, true, false, false);
         emit StrategyCreated(address(2), strategyId);
         uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
         assertEq(strategyId, createdStrategyId);
 
         strategyId = 2;
-        vm.expectEmit(true, false, false, true);
+        vm.expectEmit(true, true, false, false);
         emit StrategyCreated(address(2), strategyId);
         createdStrategyId = strategiesManager.createStrategy("Max yield", tokensParams);
         assertEq(strategyId, createdStrategyId);
@@ -53,7 +54,7 @@ contract StrategiesManagerTest is Test {
 
         vm.startPrank(address(3));
         strategyId = 1;
-        vm.expectEmit(true, false, false, true);
+        vm.expectEmit(true, true, false, false);
         emit StrategyCreated(address(3), strategyId);
         createdStrategyId = strategiesManager.createStrategy("Ape", tokensParams);
         assertEq(strategyId, createdStrategyId);
@@ -117,38 +118,41 @@ contract StrategiesManagerTest is Test {
         strategiesManager.createStrategy("Strategy with 101%", tokensParams);
     }
 
-    function testGetYourStrategy() public {
+    function testGetUserStrategy() public {
         vm.startPrank(address(2));
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
         uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
-        IStrategiesManager.StrategyView memory strategyView = strategiesManager.getYourStrategy(createdStrategyId);
+        IStrategiesManager.StrategyView memory strategyView = strategiesManager.getUserStrategy(
+            address(2),
+            createdStrategyId
+        );
         assertEq(strategyView.name, "AllIn Shitcoins");
         assertEq(keccak256(abi.encode(strategyView.tokensParams)), keccak256(abi.encode(tokensParams)));
     }
 
-    function testGetYourStrategyRejectedNotExistingId() public {
+    function testGetUserStrategyRejectedNotExistingId() public {
         vm.startPrank(address(2));
         vm.expectRevert(IStrategiesManager.StrategyDoesNotExist.selector);
-        strategiesManager.getYourStrategy(0);
+        strategiesManager.getUserStrategy(address(2), 0);
 
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
         uint256 createdStrategyId = strategiesManager.createStrategy("AllIn Shitcoins", tokensParams);
-        strategiesManager.getYourStrategy(createdStrategyId);
+        strategiesManager.getUserStrategy(address(2), createdStrategyId);
 
         vm.expectRevert(IStrategiesManager.StrategyDoesNotExist.selector);
-        strategiesManager.getYourStrategy(createdStrategyId + 1);
+        strategiesManager.getUserStrategy(address(2), createdStrategyId + 1);
     }
 
-    function getYourStrategies() public {
+    function getUserStrategies() public {
         vm.startPrank(address(2));
         IStrategiesManager.StrategyView[] memory strategyViews;
-        strategyViews = strategiesManager.getYourStrategies();
+        strategyViews = strategiesManager.getUserStrategies(address(2));
         assertEq(strategyViews.length, 0);
 
         IStrategiesManager.TokenParams[] memory tokensParams = _createTokensParamsForSuccessCall();
         strategiesManager.createStrategy("First", tokensParams);
         strategiesManager.createStrategy("Second", tokensParams);
-        strategyViews = strategiesManager.getYourStrategies();
+        strategyViews = strategiesManager.getUserStrategies(address(2));
         assertEq(strategyViews.length, 2);
         assertEq(strategyViews[0].name, "First");
         assertEq(keccak256(abi.encode(strategyViews[0].tokensParams)), keccak256(abi.encode(tokensParams)));

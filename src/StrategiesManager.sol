@@ -51,6 +51,9 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         for (uint256 i = 0; i < tokensParams_.length; i++) {
             address tokenAddress = tokensParams_[i].addr;
             uint8 tokenPercentage = tokensParams_[i].percentage;
+            if (tokenPercentage == 0) {
+                revert InvalidZeroPercentage(tokenAddress);
+            }
             if (!approvedTokens.isTokenApproved(tokenAddress)) {
                 revert TokenNotApproved();
             }
@@ -68,19 +71,23 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         return newStrategyId;
     }
 
-    function getYourStrategy(uint256 strategyId_) external view returns (IStrategiesManager.StrategyView memory) {
-        Strategy storage strategy = _getUserStrategy(msg.sender, strategyId_);
-        return _transformStrategyToViewType(strategy);
+    function getUserStrategy(address address_, uint256 strategyId_)
+        external
+        view
+        returns (IStrategiesManager.StrategyView memory)
+    {
+        Strategy storage strategy = _getUserStrategy(address_, strategyId_);
+        return _transformStrategyToViewType(strategyId_, strategy);
     }
 
-    function getYourStrategies() external view returns (IStrategiesManager.StrategyView[] memory) {
-        uint256[] memory userStrategyIds = _userStrategyIds[msg.sender];
+    function getUserStrategies(address address_) external view returns (IStrategiesManager.StrategyView[] memory) {
+        uint256[] memory userStrategyIds = _userStrategyIds[address_];
         IStrategiesManager.StrategyView[] memory strategyViews = new IStrategiesManager.StrategyView[](
             userStrategyIds.length
         );
         for (uint256 i = 0; i < userStrategyIds.length; i++) {
-            Strategy storage strategy = _userStrategy[msg.sender][userStrategyIds[i]];
-            strategyViews[i] = _transformStrategyToViewType(strategy);
+            Strategy storage strategy = _userStrategy[address_][userStrategyIds[i]];
+            strategyViews[i] = _transformStrategyToViewType(userStrategyIds[i], strategy);
         }
         return strategyViews;
     }
@@ -111,7 +118,7 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
                 swapQuotes_[i].swapCallData
             );
         }
-        emit StrategyInvestmentCompleted(msg.sender, strategyId_, amount_);
+        emit StrategyInvestmentCompleted(msg.sender, strategyId_, block.timestamp, amount_);
     }
 
     function investIntoUserStrategy(
@@ -138,12 +145,13 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         emit MaxStrategiesPerUserChanged(msg.sender, prevValue, maxStrategiesPerUser_);
     }
 
-    function _transformStrategyToViewType(Strategy storage strategy)
+    function _transformStrategyToViewType(uint256 strategyId_, Strategy storage strategy)
         private
         view
         returns (IStrategiesManager.StrategyView memory)
     {
         IStrategiesManager.StrategyView memory strategyView;
+        strategyView.id = strategyId_;
         strategyView.name = strategy.name;
         strategyView.tokensParams = new IStrategiesManager.TokenParams[](strategy.tokens.length);
         for (uint256 i = 0; i < strategy.tokens.length; i++) {
@@ -163,8 +171,4 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         }
         return strategy;
     }
-
-    // TODO:
-    // modifyStrategy: respektuje count parametry a v pripade, ze user ma jiz vice strategii
-    // nebo strategii s vice tokeny, tak nedovoli navysit pocet pokud jiz je pres limit
 }
