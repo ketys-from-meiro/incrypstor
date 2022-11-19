@@ -3,15 +3,22 @@ pragma solidity ^0.8.17;
 
 interface IStrategiesManager {
     // --- STRUCTS ---
+    // TODO: tokens decimals
     struct TokenParams {
         address addr;
         uint8 percentage;
     }
 
+    struct TokenParamsView {
+        address addr;
+        uint8 percentage;
+        uint256 holdings;
+    }
+
     struct StrategyView {
         uint256 id;
         string name;
-        TokenParams[] tokensParams;
+        TokenParamsView[] tokensParams;
     }
 
     struct ZeroXApiQuote {
@@ -31,11 +38,12 @@ interface IStrategiesManager {
     error DuplicateToken();
     error StrategyTotalPercentageNotEq100();
     error StrategyDoesNotExist();
-    error SwapQuotesArrayLengthDoesntMatch();
     error UnknownTokenInSwapQuotes(address token);
+    error StrategyWithdrawalFailed();
 
     // --- EVENTS ---
     event StrategyCreated(address indexed user, uint256 indexed strategyId);
+    event StrategyClosed(address indexed user, uint256 indexed strategyId);
     event MaxTokensPerStrategyChanged(address indexed owner, uint8 prevValue, uint8 newValue);
     event MaxStrategiesPerUserChanged(address indexed owner, uint8 prevValue, uint8 newValue);
     event StrategyInvestmentCompleted(
@@ -48,9 +56,9 @@ interface IStrategiesManager {
     // --- FUNCTIONS ---
     function createStrategy(string calldata name_, TokenParams[] calldata tokensParams_) external returns (uint256);
 
-    function getUserStrategy(address address_, uint256 strategyId_) external view returns (StrategyView memory);
+    function getUserStrategy(address user_, uint256 strategyId_) external view returns (StrategyView memory);
 
-    function getUserStrategies(address address_) external view returns (StrategyView[] memory);
+    function getUserStrategies(address user_) external view returns (StrategyView[] memory);
 
     function investIntoYourStrategy(
         uint256 strategyId_,
@@ -63,6 +71,10 @@ interface IStrategiesManager {
         uint256 strategyId_,
         uint256 amount_
     ) external payable;
+
+    function closeStrategy(uint256 strategyId_, IStrategiesManager.ZeroXApiQuote[] calldata swapQuotes_)
+        external
+        payable;
 
     function setMaxTokensPerStrategy(uint8 maxTokensPerStrategy_) external;
 

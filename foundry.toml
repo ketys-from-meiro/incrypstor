@@ -2,7 +2,7 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-
 verbosity = 4
+eth_rpc_url = "https://holy-purple-mansion.ethereum-goerli.discover.quiknode.pro/e591c7535f3b6f737c9848435eccb36b1568a868/"
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

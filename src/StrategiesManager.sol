@@ -71,37 +71,35 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         return newStrategyId;
     }
 
-    function getUserStrategy(address address_, uint256 strategyId_)
+    function getUserStrategy(address user_, uint256 strategyId_)
         external
         view
         returns (IStrategiesManager.StrategyView memory)
     {
-        Strategy storage strategy = _getUserStrategy(address_, strategyId_);
-        return _transformStrategyToViewType(strategyId_, strategy);
+        Strategy storage strategy = _getUserStrategy(user_, strategyId_);
+        return _transformStrategyToViewType(user_, strategyId_, strategy);
     }
 
-    function getUserStrategies(address address_) external view returns (IStrategiesManager.StrategyView[] memory) {
-        uint256[] memory userStrategyIds = _userStrategyIds[address_];
+    function getUserStrategies(address user_) external view returns (IStrategiesManager.StrategyView[] memory) {
+        uint256[] memory userStrategyIds = _userStrategyIds[user_];
         IStrategiesManager.StrategyView[] memory strategyViews = new IStrategiesManager.StrategyView[](
             userStrategyIds.length
         );
         for (uint256 i = 0; i < userStrategyIds.length; i++) {
-            Strategy storage strategy = _userStrategy[address_][userStrategyIds[i]];
-            strategyViews[i] = _transformStrategyToViewType(userStrategyIds[i], strategy);
+            Strategy storage strategy = _userStrategy[user_][userStrategyIds[i]];
+            strategyViews[i] = _transformStrategyToViewType(user_, userStrategyIds[i], strategy);
         }
         return strategyViews;
     }
 
     // must send msg.value covering `amount_` deposit plus fees for 0x swaps (swapQuotes[].gasPrice)
+    // TODO: fix wETH allocation..., there's no swap needed for it
     function investIntoYourStrategy(
         uint256 strategyId_,
         uint256 amount_,
         IStrategiesManager.ZeroXApiQuote[] calldata swapQuotes_
     ) external payable nonReentrant {
         Strategy storage strategy = _getUserStrategy(msg.sender, strategyId_);
-        if (swapQuotes_.length != strategy.tokens.length) {
-            revert SwapQuotesArrayLengthDoesntMatch();
-        }
         tokensOperations.depositETH{value: amount_}(msg.sender, strategyId_);
         for (uint256 i = 0; i < swapQuotes_.length; i++) {
             address tokenAddress = swapQuotes_[i].token;
@@ -119,6 +117,57 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
             );
         }
         emit StrategyInvestmentCompleted(msg.sender, strategyId_, block.timestamp, amount_);
+    }
+
+    function closeStrategy(uint256 strategyId_, IStrategiesManager.ZeroXApiQuote[] calldata swapQuotes_)
+        external
+        payable
+        nonReentrant
+    {
+        Strategy storage strategy = _getUserStrategy(msg.sender, strategyId_);
+        for (uint256 i = 0; i < swapQuotes_.length; i++) {
+            address tokenAddress = swapQuotes_[i].token;
+            if (strategy.tokenPercentage[tokenAddress] == 0) {
+                revert UnknownTokenInSwapQuotes({token: tokenAddress});
+            }
+            // TODO: figure it out better...maybe decode amount from swapQuote data
+            uint256 tokenBalance = tokensOperations.getTokenBalance(msg.sender, strategyId_, tokenAddress);
+            tokensOperations.sellToken{value: swapQuotes_[i].gasPrice}(
+                msg.sender,
+                strategyId_,
+                IERC20(tokenAddress),
+                tokenBalance,
+                swapQuotes_[i].spender,
+                swapQuotes_[i].swapCallData
+            );
+        }
+        tokensOperations.claimRefunds(msg.sender);
+        tokensOperations.withdrawAllETH(msg.sender, strategyId_);
+
+        // delete strategy
+        for (uint256 i = 0; i < strategy.tokens.length; i++) {
+            delete strategy.tokenPercentage[strategy.tokens[i]];
+        }
+        delete _userStrategy[msg.sender][strategyId_];
+        uint256 strategyIndex = 0;
+        for (uint256 i = 0; i < _userStrategyIds[msg.sender].length; i++) {
+            if (_userStrategyIds[msg.sender][i] == strategyId_) {
+                strategyIndex = i;
+                break;
+            }
+        }
+        _userStrategyIds[msg.sender][strategyIndex] = _userStrategyIds[msg.sender][
+            _userStrategyIds[msg.sender].length - 1
+        ];
+        _userStrategyIds[msg.sender].pop();
+
+        // send eth to user
+        // TODO: can be called only by StrategiesManager contract, anyone can withdraw now!
+        (bool success, ) = msg.sender.call{value: address(this).balance}("");
+        if (success == false) {
+            revert StrategyWithdrawalFailed();
+        }
+        emit StrategyClosed(msg.sender, strategyId_);
     }
 
     function investIntoUserStrategy(
@@ -145,20 +194,22 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         emit MaxStrategiesPerUserChanged(msg.sender, prevValue, maxStrategiesPerUser_);
     }
 
-    function _transformStrategyToViewType(uint256 strategyId_, Strategy storage strategy)
-        private
-        view
-        returns (IStrategiesManager.StrategyView memory)
-    {
+    function _transformStrategyToViewType(
+        address user_,
+        uint256 strategyId_,
+        Strategy storage strategy
+    ) private view returns (IStrategiesManager.StrategyView memory) {
         IStrategiesManager.StrategyView memory strategyView;
         strategyView.id = strategyId_;
         strategyView.name = strategy.name;
-        strategyView.tokensParams = new IStrategiesManager.TokenParams[](strategy.tokens.length);
+        strategyView.tokensParams = new IStrategiesManager.TokenParamsView[](strategy.tokens.length);
         for (uint256 i = 0; i < strategy.tokens.length; i++) {
             address tokenAddr = strategy.tokens[i];
-            strategyView.tokensParams[i] = IStrategiesManager.TokenParams({
+            uint256 tokenBalance = tokensOperations.getTokenBalance(user_, strategyId_, tokenAddr);
+            strategyView.tokensParams[i] = IStrategiesManager.TokenParamsView({
                 addr: tokenAddr,
-                percentage: strategy.tokenPercentage[tokenAddr]
+                percentage: strategy.tokenPercentage[tokenAddr],
+                holdings: tokenBalance
             });
         }
         return strategyView;
