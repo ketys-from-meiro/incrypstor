@@ -12,6 +12,7 @@ contract TokensOperations is ITokensOperations, Ownable {
     address public exchangeProxy;
     IWETH public immutable wETH;
     IApprovedTokens public approvedTokens;
+    address public strategiesManagerAddress;
     mapping(address => mapping(uint256 => mapping(address => uint256))) private _userStrategyTokenBalance;
     mapping(address => mapping(uint256 => uint256)) private _userStrategySpendableWETH;
     mapping(address => uint256) public userRefundsAmount;
@@ -29,14 +30,23 @@ contract TokensOperations is ITokensOperations, Ownable {
     // Payable fallback to allow this contract to receive protocol fee refunds.
     receive() external payable {}
 
-    function depositETH(address user_, uint256 strategyId_) external payable {
-        // TODO: can be called only by StrategiesManager contract
+    modifier onlyStrategiesManager() {
+        if (msg.sender != strategiesManagerAddress) {
+            revert NotStrategiesManagerCaller();
+        }
+        _;
+    }
+
+    function setStrategiesManagerAddress(address strategiesManagerAddress_) external onlyOwner {
+        strategiesManagerAddress = strategiesManagerAddress_;
+    }
+
+    function depositETH(address user_, uint256 strategyId_) external payable onlyStrategiesManager {
         _userStrategySpendableWETH[user_][strategyId_] += msg.value;
         wETH.deposit{value: msg.value}();
     }
 
-    function withdrawAllETH(address user_, uint256 strategyId_) external {
-        // TODO: can be called only by StrategiesManager contract
+    function withdrawAllETH(address user_, uint256 strategyId_) external onlyStrategiesManager {
         uint256 amount = _userStrategySpendableWETH[user_][strategyId_];
         _userStrategySpendableWETH[user_][strategyId_] = 0;
         wETH.withdraw(amount);
@@ -55,8 +65,7 @@ contract TokensOperations is ITokensOperations, Ownable {
         uint256 wETHAmount_,
         address spender_,
         bytes calldata swapCallData_
-    ) external payable {
-        // TODO: can be called only by StrategiesManager contract!
+    ) external payable onlyStrategiesManager {
         if (_userStrategySpendableWETH[user_][strategyId_] < wETHAmount_) {
             revert InsufficientFunds({required: wETHAmount_, current: _userStrategySpendableWETH[user_][strategyId_]});
         }
@@ -85,8 +94,7 @@ contract TokensOperations is ITokensOperations, Ownable {
         uint256 tokenAmount_,
         address spender_,
         bytes calldata swapCallData_
-    ) external payable {
-        // TODO: can be called only by StrategiesManager contract!
+    ) external payable onlyStrategiesManager {
         uint256 tokenBalance = _userStrategyTokenBalance[user_][strategyId_][address(token_)];
         if (tokenAmount_ > tokenBalance) {
             revert InsufficientFunds({required: tokenAmount_, current: tokenBalance});
@@ -122,8 +130,7 @@ contract TokensOperations is ITokensOperations, Ownable {
         return _userStrategyTokenBalance[user_][strategyId_][tokenAddr_];
     }
 
-    function claimRefunds(address user_) external {
-        // TODO: can be called only by StrategiesManager contract, anyone can withdraw now!
+    function claimRefunds(address user_) external onlyStrategiesManager {
         uint256 refundAmount = userRefundsAmount[user_];
         userRefundsAmount[user_] = 0;
         (bool success, ) = msg.sender.call{value: refundAmount}("");

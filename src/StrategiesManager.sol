@@ -29,6 +29,10 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         tokensOperations = ITokensOperations(tokensOperations_);
     }
 
+    receive() external payable {}
+
+    fallback() external payable {}
+
     function createStrategy(string calldata name_, IStrategiesManager.TokenParams[] memory tokensParams_)
         external
         returns (uint256)
@@ -141,7 +145,8 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
                 swapQuotes_[i].swapCallData
             );
         }
-        tokensOperations.claimRefunds(msg.sender);
+        // TODO: inspect why refunds from 0x don't work
+        //tokensOperations.claimRefunds(msg.sender);
         tokensOperations.withdrawAllETH(msg.sender, strategyId_);
 
         // delete strategy
@@ -162,7 +167,6 @@ contract StrategiesManager is IStrategiesManager, Ownable, ReentrancyGuard {
         _userStrategyIds[msg.sender].pop();
 
         // send eth to user
-        // TODO: can be called only by StrategiesManager contract, anyone can withdraw now!
         (bool success, ) = msg.sender.call{value: address(this).balance}("");
         if (success == false) {
             revert StrategyWithdrawalFailed();

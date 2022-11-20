@@ -11,6 +11,7 @@ interface ITokensOperations {
     error RefundClaimFailed();
     error InsufficientFunds(uint256 required, uint256 current);
     error WithdrawalFailed();
+    error NotStrategiesManagerCaller();
 
     // --- EVENTS ---
     event TokenBought(
@@ -64,4 +65,6 @@ interface ITokensOperations {
     ) external view returns (uint256);
 
     function setExchangeProxy(address exchangeProxy_) external;
+
+    function setStrategiesManagerAddress(address strategiesManagerAddress_) external;
 }

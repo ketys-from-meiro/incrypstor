@@ -19,7 +19,7 @@ cast send --private-key $PRIV_KEY $APPROVED_TOKENS_CON_ADDRESS "approveToken(add
 cast send --private-key $PRIVATE_KEY $APPROVED_TOKENS_CON_ADDRESS "approveToken(address)" 0x326C977E6efc84E512bB9C30f76E30c160eD06FB
 --- deploy tokens operations (exchangeProxy, weth, approvedTokens)
 forge create src/TokensOperations.sol:TokensOperations --private-key=$PRIVATE_KEY --constructor-args 0xF91bB752490473B8342a3E964E855b9f9a2A668e 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6 $APPROVED_TOKENS_CON_ADDRESS
-export TOKENS_OPERATIONS_CON_ADDRESS=0x457b989132c0afE0Ffbf2b00062aE9E8d8048870
+export TOKENS_OPERATIONS_CON_ADDRESS=0xF10170F939a5b566d0e4594620a7623bD2C2B24b
 --- deploy strategies manager (address approvedTokens_, address tokensOperations_)
 forge create src/StrategiesManager.sol:StrategiesManager --private-key=$PRIVATE_KEY --constructor-args $APPROVED_TOKENS_CON_ADDRESS $TOKENS_OPERATIONS_CON_ADDRESS
 ```
